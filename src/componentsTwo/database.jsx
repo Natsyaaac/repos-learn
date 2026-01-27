@@ -1,4 +1,4 @@
-import './database.css'
+import './database.css';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -9,6 +9,9 @@ const Table = () => {
     const [search, setSearch] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [showDetail, setShowDetail] = useState(false);
+    const [detailLoading, setDetailLoading] = useState(false);
     const itemsPerPage = 5;
 
     useEffect(() => {
@@ -19,7 +22,6 @@ const Table = () => {
         try {
             setLoading(true);
             const response = await axios.get('http://localhost:5000/api/products');
-            // Sesuaikan dengan response dari backend
             setProducts(response.data.data || response.data || []);
             setError(null);
         } catch (err) {
@@ -28,6 +30,25 @@ const Table = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchProductDetail = async (productId) => {
+        try {
+            setDetailLoading(true);
+            const response = await axios.get(`http://localhost:5000/api/products/${productId}`);
+            setSelectedProduct(response.data.data);
+            setShowDetail(true);
+        } catch (err) {
+            setError('Gagal mengambil detail produk');
+            console.error(err);
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
+    const closeDetail = () => {
+        setShowDetail(false);
+        setSelectedProduct(null);
     };
 
     // Filter data berdasarkan search
@@ -69,7 +90,7 @@ const Table = () => {
             direction = 'desc';
         }
         setSortConfig({ key, direction });
-        setCurrentPage(1); // Reset ke halaman 1 saat sorting
+        setCurrentPage(1);
     };
 
     const handleRefresh = () => {
@@ -93,6 +114,89 @@ const Table = () => {
         if (stock > 50) return 'high';
         if (stock > 10) return 'medium';
         return 'low';
+    };
+
+    // Export to CSV
+    const exportToCSV = () => {
+        try {
+            // Header CSV
+            const headers = ['ID Produk', 'Kategori', 'Nama Produk', 'Harga', 'Stok', 'Deskripsi'];
+            
+            // Data CSV
+            const csvData = filteredData.map(product => [
+                product.product_id,
+                `KAT-${product.category_id}`,
+                product.product_name,
+                product.price,
+                product.stock,
+                product.description || ''
+            ]);
+            
+            // Gabungkan header dan data
+            const csvContent = [
+                headers.join(','),
+                ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+            ].join('\n');
+            
+            // Buat blob dan download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `produk_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Notifikasi sukses
+            setError(null);
+            setTimeout(() => {
+                alert('✅ Data berhasil diexport ke CSV!');
+            }, 100);
+            
+        } catch (err) {
+            setError('Gagal mengexport data ke CSV');
+            console.error(err);
+        }
+    };
+
+    // Print table
+    const printTable = () => {
+        const printContent = document.querySelector('.table-wrapper').innerHTML;
+        const originalContent = document.body.innerHTML;
+        
+        document.body.innerHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Data Produk - ${new Date().toLocaleDateString()}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #4f46e5; color: white; }
+                    tr:nth-child(even) { background-color: #f2f2f2; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    .timestamp { color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>📦 Data Produk</h1>
+                    <p class="timestamp">Dicetak pada: ${new Date().toLocaleString()}</p>
+                    <p>Total: ${filteredData.length} produk</p>
+                </div>
+                ${printContent}
+            </body>
+            </html>
+        `;
+        
+        window.print();
+        document.body.innerHTML = originalContent;
+        window.location.reload();
     };
 
     if (loading) {
@@ -169,7 +273,12 @@ const Table = () => {
                     <tbody>
                         {currentItems.length > 0 ? (
                             currentItems.map((product) => (
-                                <tr key={product.product_id}>
+                                <tr 
+                                    key={product.product_id}
+                                    className="clickable-row"
+                                    onClick={() => fetchProductDetail(product.product_id)}
+                                    style={{ cursor: 'pointer' }}
+                                >
                                     <td className="id-cell">#{product.product_id}</td>
                                     <td className="category-cell">
                                         <span className="category-badge">
@@ -215,6 +324,98 @@ const Table = () => {
                 </table>
             </div>
 
+            {/* Modal Detail Produk */}
+            {showDetail && (
+                <div className="modal-overlay" onClick={closeDetail}>
+                    <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>📋 Detail Produk</h2>
+                            <button className="close-btn" onClick={closeDetail}>
+                                ✕
+                            </button>
+                        </div>
+                        
+                        {detailLoading ? (
+                            <div className="detail-loading">
+                                <div className="spinner"></div>
+                                <p>Memuat detail produk...</p>
+                            </div>
+                        ) : selectedProduct ? (
+                            <div className="modal-content">
+                                <div className="product-header">
+                                    <div className="detail-avatar">
+                                        {selectedProduct.product_name?.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h3>{selectedProduct.product_name}</h3>
+                                        <p className="product-id">ID: #{selectedProduct.product_id}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="detail-grid">
+                                    <div className="detail-item">
+                                        <span className="detail-label">Kategori</span>
+                                        <span className="detail-value">
+                                            <span className="category-badge">
+                                                KAT-{selectedProduct.category_id}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="detail-item">
+                                        <span className="detail-label">Harga</span>
+                                        <span className="detail-value price-highlight">
+                                            {formatCurrency(selectedProduct.price)}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="detail-item">
+                                        <span className="detail-label">Stok Tersedia</span>
+                                        <span className="detail-value">
+                                            <span className={`stock-badge-large ${getStockBadgeClass(selectedProduct.stock)}`}>
+                                                {selectedProduct.stock} unit
+                                            </span>
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="detail-item">
+                                        <span className="detail-label">Nilai Inventori</span>
+                                        <span className="detail-value">
+                                            {formatCurrency(selectedProduct.price * selectedProduct.stock)}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <div className="description-section">
+                                    <h4>Deskripsi Produk</h4>
+                                    <div className="description-full">
+                                        {selectedProduct.description || 
+                                         <span className="no-description">Tidak ada deskripsi</span>}
+                                    </div>
+                                </div>
+                                
+                                <div className="modal-actions">
+                                    <button className="btn-edit">
+                                        ✏️ Edit Produk
+                                    </button>
+                                    <button className="btn-delete">
+                                        🗑️ Hapus Produk
+                                    </button>
+                                    <button className="btn-close" onClick={closeDetail}>
+                                        Tutup
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="error-detail">
+                                <p>Produk tidak ditemukan</p>
+                                <button onClick={closeDetail}>Tutup</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Pagination */}
             {totalPages > 1 && (
                 <div className="pagination">
@@ -258,10 +459,10 @@ const Table = () => {
                     )}</span>
                 </div>
                 <div className="export-btn">
-                    <button className="export-csv">
+                    <button className="export-csv" onClick={exportToCSV}>
                         📥 Export CSV
                     </button>
-                    <button className="print-btn">
+                    <button className="print-btn" onClick={printTable}>
                         🖨️ Print
                     </button>
                 </div>

@@ -33,7 +33,7 @@ pool.connect((err, client, release) => {
 app.get('/api/products', async (req, res) => {
     try {
         const result = await pool.query(
-            'SELECT product_id, category_id, product_name, price, stock, description FROM products ORDER BY category_id DESC'
+            'SELECT product_id, category_id, product_name, price, stock, description FROM products ORDER BY product_id ASC'
         );
         res.json({
             success: true,
@@ -52,16 +52,16 @@ app.get('/api/products', async (req, res) => {
 // API Endpoint: Get user by ID
 app.get('/api/products/:product_id', async (req, res) => {
     try {
-        const { id } = req.params;
+        const { product_id } = req.params;
         const result = await pool.query(
             'SELECT product_id, product_name, price, stock FROM products WHERE product_id = $1',
-            [id]
+            [product_id]
         );
         
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found'
+                message: 'Product not found'
             });
         }
         
@@ -85,7 +85,7 @@ app.get('/api/products/search/:keyword', async (req, res) => {
         const result = await pool.query(
             `SELECT product_id, product_name, price, stock
              FROM products 
-             WHERE product_name ILIKE $1 OR description 
+             WHERE product_name ILIKE $1 OR description ILIKE $1
              ORDER BY stock DESC`,
             [`%${keyword}%`]
         );

@@ -1,12 +1,16 @@
-import GridOne from './componentsOne/Home';
-import GridTwo from './componentsTwo/database';
+// import GridOne from './componentsOne/Home';
+// import GridTwo from './componentsTwo/database';
+// import GridThree from './componentsThree/SimpleTable';
+import GridFour from './componentsFour/ProductGridSectOne'
 function App() {
   
 
   return (
     <>
     {/* <GridOne /> */}
-    <GridTwo />
+    {/* <GridTwo /> */}
+    {/* <GridThree /> */}
+    <GridFour />
     </>
   )
 }
